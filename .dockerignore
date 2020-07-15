@@ -1,0 +1,7 @@
+.git
+.dockerignore
+.gitignore
+.vscode
+**/__pycache__
+*.bat
+*.sh
