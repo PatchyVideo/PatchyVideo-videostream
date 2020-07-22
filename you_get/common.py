@@ -14,6 +14,7 @@ import ssl
 from http import cookiejar
 from importlib import import_module
 from urllib import request, parse, error
+from aiohttp import ClientSession
 
 from .version import __version__
 from .util import log, term
@@ -418,7 +419,7 @@ def urlopen_with_retry(*args, **kwargs):
                 raise http_error
 
 
-def get_content(url, headers={}, decoded=True):
+async def get_content(url, headers={}, decoded=True):
     """Gets the content of a URL via sending a HTTP GET request.
 
     Args:
@@ -432,32 +433,35 @@ def get_content(url, headers={}, decoded=True):
 
     logging.debug('get_content: %s' % url)
 
-    req = request.Request(url, headers=headers)
-    if cookies:
-        cookies.add_cookie_header(req)
-        req.headers.update(req.unredirected_hdrs)
+    async with ClientSession() as session:
+        async with session.get(url, headers = headers, cookies = cookies) as resp:
+            # req = request.Request(url, headers=headers)
+            # if cookies:
+            #     cookies.add_cookie_header(req)
+            #     req.headers.update(req.unredirected_hdrs)
 
-    response = urlopen_with_retry(req)
-    data = response.read()
+            # response = urlopen_with_retry(req)
+            # data = response.read()
+            data = await resp.read()
 
-    # Handle HTTP compression for gzip and deflate (zlib)
-    content_encoding = response.getheader('Content-Encoding')
-    if content_encoding == 'gzip':
-        data = ungzip(data)
-    elif content_encoding == 'deflate':
-        data = undeflate(data)
+            # Handle HTTP compression for gzip and deflate (zlib)
+            # content_encoding = resp.headers.get('Content-Encoding', '')
+            # if content_encoding == 'gzip':
+            #     data = ungzip(data)
+            # elif content_encoding == 'deflate':
+            #     data = undeflate(data)
 
-    # Decode the response body
-    if decoded:
-        charset = match1(
-            response.getheader('Content-Type', ''), r'charset=([\w-]+)'
-        )
-        if charset is not None:
-            data = data.decode(charset, 'ignore')
-        else:
-            data = data.decode('utf-8', 'ignore')
+            # Decode the response body
+            if decoded:
+                charset = match1(
+                    resp.headers.get('Content-Type', ''), r'charset=([\w-]+)'
+                )
+                if charset is not None:
+                    data = data.decode(charset, 'ignore')
+                else:
+                    data = data.decode('utf-8', 'ignore')
 
-    return data
+            return data
 
 
 def post_content(url, headers={}, post_data={}, decoded=True, **kwargs):
@@ -507,18 +511,26 @@ def post_content(url, headers={}, post_data={}, decoded=True, **kwargs):
     return data
 
 
-def url_size(url, faker=False, headers={}):
-    if faker:
-        response = urlopen_with_retry(
-            request.Request(url, headers=fake_headers)
-        )
-    elif headers:
-        response = urlopen_with_retry(request.Request(url, headers=headers))
-    else:
-        response = urlopen_with_retry(url)
-
-    size = response.headers['content-length']
-    return int(size) if size is not None else float('inf')
+async def url_size(url, faker=False, headers={}):
+    # if faker:
+    #     response = urlopen_with_retry(
+    #         request.Request(url, headers=fake_headers)
+    #     )
+    # elif headers:
+    #     response = urlopen_with_retry(request.Request(url, headers=headers))
+    # else:
+    #     response = urlopen_with_retry(url)
+    
+    req_headers = {}
+    if faker :
+        req_headers = fake_headers
+    elif headers :
+        req_headers = headers
+    
+    async with ClientSession() as session:
+        async with session.get(url, headers = req_headers) as resp:
+            size = resp.headers['content-length']
+            return int(size) if size is not None else float('inf')
 
 
 def urls_size(urls, faker=False, headers={}):
@@ -537,66 +549,74 @@ def get_head(url, headers=None, get_method='HEAD'):
     return res.headers
 
 
-def url_info(url, faker=False, headers={}):
+async def url_info(url, faker=False, headers={}):
     logging.debug('url_info: %s' % url)
 
-    if faker:
-        response = urlopen_with_retry(
-            request.Request(url, headers=fake_headers)
-        )
-    elif headers:
-        response = urlopen_with_retry(request.Request(url, headers=headers))
-    else:
-        response = urlopen_with_retry(request.Request(url))
+    # if faker:
+    #     response = urlopen_with_retry(
+    #         request.Request(url, headers=fake_headers)
+    #     )
+    # elif headers:
+    #     response = urlopen_with_retry(request.Request(url, headers=headers))
+    # else:
+    #     response = urlopen_with_retry(request.Request(url))
 
-    headers = response.headers
+    req_headers = {}
+    if faker :
+        req_headers = fake_headers
+    elif headers :
+        req_headers = headers
+    
+    async with ClientSession() as session:
+        async with session.get(url, headers = req_headers) as resp:
+            headers = resp.headers
 
-    type = headers['content-type']
-    if type == 'image/jpg; charset=UTF-8' or type == 'image/jpg':
-        type = 'audio/mpeg'  # fix for netease
-    mapping = {
-        'video/3gpp': '3gp',
-        'video/f4v': 'flv',
-        'video/mp4': 'mp4',
-        'video/MP2T': 'ts',
-        'video/quicktime': 'mov',
-        'video/webm': 'webm',
-        'video/x-flv': 'flv',
-        'video/x-ms-asf': 'asf',
-        'audio/mp4': 'mp4',
-        'audio/mpeg': 'mp3',
-        'audio/wav': 'wav',
-        'audio/x-wav': 'wav',
-        'audio/wave': 'wav',
-        'image/jpeg': 'jpg',
-        'image/png': 'png',
-        'image/gif': 'gif',
-        'application/pdf': 'pdf',
-    }
-    if type in mapping:
-        ext = mapping[type]
-    else:
-        type = None
-        if headers['content-disposition']:
-            try:
-                filename = parse.unquote(
-                    r1(r'filename="?([^"]+)"?', headers['content-disposition'])
-                )
-                if len(filename.split('.')) > 1:
-                    ext = filename.split('.')[-1]
+            type = headers['content-type']
+            if type == 'image/jpg; charset=UTF-8' or type == 'image/jpg':
+                type = 'audio/mpeg'  # fix for netease
+            mapping = {
+                'video/3gpp': '3gp',
+                'video/f4v': 'flv',
+                'video/mp4': 'mp4',
+                'video/MP2T': 'ts',
+                'video/quicktime': 'mov',
+                'video/webm': 'webm',
+                'video/x-flv': 'flv',
+                'video/x-ms-asf': 'asf',
+                'audio/mp4': 'mp4',
+                'audio/mpeg': 'mp3',
+                'audio/wav': 'wav',
+                'audio/x-wav': 'wav',
+                'audio/wave': 'wav',
+                'image/jpeg': 'jpg',
+                'image/png': 'png',
+                'image/gif': 'gif',
+                'application/pdf': 'pdf',
+            }
+            if type in mapping:
+                ext = mapping[type]
+            else:
+                type = None
+                if headers['content-disposition']:
+                    try:
+                        filename = parse.unquote(
+                            r1(r'filename="?([^"]+)"?', headers['content-disposition'])
+                        )
+                        if len(filename.split('.')) > 1:
+                            ext = filename.split('.')[-1]
+                        else:
+                            ext = None
+                    except:
+                        ext = None
                 else:
                     ext = None
-            except:
-                ext = None
-        else:
-            ext = None
 
-    if headers['transfer-encoding'] != 'chunked':
-        size = headers['content-length'] and int(headers['content-length'])
-    else:
-        size = None
+            if headers['transfer-encoding'] != 'chunked':
+                size = headers['content-length'] and int(headers['content-length'])
+            else:
+                size = None
 
-    return type, ext, size
+            return type, ext, size
 
 
 def url_locations(urls, faker=False, headers={}):

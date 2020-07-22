@@ -125,17 +125,17 @@ class Bilibili(VideoExtractor):
         return 'https://api.vc.bilibili.com/link_draw/v1/doc/detail?doc_id=%s' % doc_id
 
     @staticmethod
-    def url_size(url, faker=False, headers={},err_value=0):
+    async def url_size(url, faker=False, headers={},err_value=0):
         try:
-            return url_size(url,faker,headers)
+            return await url_size(url,faker,headers)
         except:
             return err_value
 
-    def prepare(self, **kwargs):
+    async def prepare(self, **kwargs):
         self.stream_qualities = {s['quality']: s for s in self.stream_types}
 
         try:
-            html_content = get_content(self.url, headers=self.bilibili_headers(referer=self.url))
+            html_content = await get_content(self.url, headers=self.bilibili_headers(referer=self.url))
         except:
             html_content = ''  # live always returns 400 (why?)
         #self.title = match1(html_content,
@@ -146,7 +146,7 @@ class Bilibili(VideoExtractor):
             avid = match1(self.url, r'/(av\d+)') or match1(self.url, r'/(BV\w+)')
             p = int(match1(self.url, r'/p(\d+)') or '1')
             self.url = 'https://www.bilibili.com/video/%s?p=%s' % (avid, p)
-            html_content = get_content(self.url, headers=self.bilibili_headers())
+            html_content = await get_content(self.url, headers=self.bilibili_headers())
 
         # redirect: bangumi/play/ss -> bangumi/play/ep
         # redirect: bangumi.bilibili.com/anime -> bangumi/play/ep
@@ -156,7 +156,7 @@ class Bilibili(VideoExtractor):
             initial_state = json.loads(initial_state_text)
             ep_id = initial_state['epList'][0]['id']
             self.url = 'https://www.bilibili.com/bangumi/play/ep%s' % ep_id
-            html_content = get_content(self.url, headers=self.bilibili_headers(referer=self.url))
+            html_content = await get_content(self.url, headers=self.bilibili_headers(referer=self.url))
 
         # sort it out
         if re.match(r'https?://(www\.)?bilibili\.com/audio/au(\d+)', self.url):
@@ -174,6 +174,7 @@ class Bilibili(VideoExtractor):
         elif re.match(r'https?://h\.?bilibili\.com/(\d+)', self.url):
             sort = 'h'
         else:
+            raise Exception('playlist not supported')
             self.download_playlist_by_url(self.url, **kwargs)
             return
 
@@ -185,7 +186,7 @@ class Bilibili(VideoExtractor):
             playinfo_text = match1(html_content, r'__playinfo__=(.*?)</script><script>')  # FIXME
             playinfo = json.loads(playinfo_text) if playinfo_text else None
 
-            html_content_ = get_content(self.url, headers=self.bilibili_headers(cookie='CURRENT_FNVAL=16'))
+            html_content_ = await get_content(self.url, headers=self.bilibili_headers(cookie='CURRENT_FNVAL=16'))
             playinfo_text_ = match1(html_content_, r'__playinfo__=(.*?)</script><script>')  # FIXME
             playinfo_ = json.loads(playinfo_text_) if playinfo_text_ else None
 
@@ -222,7 +223,7 @@ class Bilibili(VideoExtractor):
                 # for dash, qn does not matter
                 if current_quality is None or qn < current_quality:
                     api_url = self.bilibili_api(avid, cid, qn=qn)
-                    api_content = get_content(api_url, headers=self.bilibili_headers(referer=self.url))
+                    api_content = await get_content(api_url, headers=self.bilibili_headers(referer=self.url))
                     api_playinfo = json.loads(api_content)
                     if api_playinfo['code'] == 0:  # success
                         playinfos.append(api_playinfo)
@@ -230,7 +231,7 @@ class Bilibili(VideoExtractor):
                         message = api_playinfo['data']['message']
                 if best_quality is None or qn <= best_quality:
                     api_url = self.bilibili_interface_api(cid, qn=qn)
-                    api_content = get_content(api_url, headers=self.bilibili_headers(referer=self.url))
+                    api_content = await get_content(api_url, headers=self.bilibili_headers(referer=self.url))
                     api_playinfo_data = json.loads(api_content)
                     if api_playinfo_data.get('quality'):
                         playinfos.append({'code': 0, 'message': '0', 'ttl': 1, 'data': api_playinfo_data})
@@ -238,7 +239,7 @@ class Bilibili(VideoExtractor):
                 log.w(message)
                 # use bilibili error video instead
                 url = 'https://static.hdslb.com/error.mp4'
-                _, container, size = url_info(url)
+                _, container, size = await url_info(url)
                 self.streams['flv480'] = {'container': container, 'size': size, 'src': [url]}
                 return
 
@@ -266,7 +267,7 @@ class Bilibili(VideoExtractor):
                         desc = s['desc']
                         audio_quality = s['audio_quality']
                         baseurl = video['baseUrl']
-                        size = self.url_size(baseurl, headers=self.bilibili_headers(referer=self.url))
+                        size = await self.url_size(baseurl, headers=self.bilibili_headers(referer=self.url))
 
                         # find matching audio track
                         if playinfo['data']['dash']['audio']:
@@ -276,7 +277,7 @@ class Bilibili(VideoExtractor):
                                     audio_baseurl = audio['baseUrl']
                                     break
                             if not audio_size_cache.get(audio_quality, False):
-                                audio_size_cache[audio_quality] = self.url_size(audio_baseurl, headers=self.bilibili_headers(referer=self.url))
+                                audio_size_cache[audio_quality] = await self.url_size(audio_baseurl, headers=self.bilibili_headers(referer=self.url))
                             size += audio_size_cache[audio_quality]
 
                             self.dash_streams[format_id] = {'container': container, 'quality': desc,
@@ -286,10 +287,12 @@ class Bilibili(VideoExtractor):
                                                             'src': [[baseurl]], 'size': size}
 
             # get danmaku
-            self.danmaku = get_content('http://comment.bilibili.com/%s.xml' % cid)
+            self.danmaku = 'http://comment.bilibili.com/%s.xml' % cid
+            self.video_cid = cid
 
         # bangumi
         elif sort == 'bangumi':
+            raise Exception('bangumi not supported')
             initial_state_text = match1(html_content, r'__INITIAL_STATE__=(.*?);\(function\(\)')  # FIXME
             initial_state = json.loads(initial_state_text)
 
@@ -350,7 +353,7 @@ class Bilibili(VideoExtractor):
                         desc = s['desc']
                         audio_quality = s['audio_quality']
                         baseurl = video['baseUrl']
-                        size = url_size(baseurl, headers=self.bilibili_headers(referer=self.url))
+                        size = await url_size(baseurl, headers=self.bilibili_headers(referer=self.url))
 
                         # find matching audio track
                         audio_baseurl = playinfo['result']['dash']['audio'][0]['baseUrl']
@@ -358,19 +361,20 @@ class Bilibili(VideoExtractor):
                             if int(audio['id']) == audio_quality:
                                 audio_baseurl = audio['baseUrl']
                                 break
-                        size += url_size(audio_baseurl, headers=self.bilibili_headers(referer=self.url))
+                        size += await url_size(audio_baseurl, headers=self.bilibili_headers(referer=self.url))
 
                         self.dash_streams[format_id] = {'container': container, 'quality': desc,
                                                         'src': [[baseurl], [audio_baseurl]], 'size': size}
 
             # get danmaku
             self.danmaku = get_content('http://comment.bilibili.com/%s.xml' % cid)
+            self.video_cid = cid
 
         # vc video
         elif sort == 'vc':
             video_id = match1(self.url, r'https?://vc\.?bilibili\.com/video/(\d+)')
             api_url = self.bilibili_vc_api(video_id)
-            api_content = get_content(api_url, headers=self.bilibili_headers())
+            api_content = await get_content(api_url, headers=self.bilibili_headers())
             api_playinfo = json.loads(api_content)
 
             # set video title
@@ -390,6 +394,7 @@ class Bilibili(VideoExtractor):
 
         # live
         elif sort == 'live':
+            raise Exception('live not supported')
             m = re.match(r'https?://live\.bilibili\.com/(\w+)', self.url)
             short_id = m.group(1)
             api_url = self.bilibili_live_room_init_api(short_id)
@@ -419,14 +424,14 @@ class Bilibili(VideoExtractor):
             m = re.match(r'https?://(?:www\.)?bilibili\.com/audio/au(\d+)', self.url)
             sid = m.group(1)
             api_url = self.bilibili_audio_info_api(sid)
-            api_content = get_content(api_url, headers=self.bilibili_headers())
+            api_content = await get_content(api_url, headers=self.bilibili_headers())
             song_info = json.loads(api_content)
 
             # set audio title
             self.title = song_info['data']['title']
 
             # get lyrics
-            self.lyrics = get_content(song_info['data']['lyric'])
+            self.lyrics = await get_content(song_info['data']['lyric'])
 
             api_url = self.bilibili_audio_api(sid)
             api_content = get_content(api_url, headers=self.bilibili_headers())
@@ -440,6 +445,7 @@ class Bilibili(VideoExtractor):
 
         # h images
         elif sort == 'h':
+            raise Exception('h image not supported')
             m = re.match(r'https?://h\.?bilibili\.com/(\d+)', self.url)
             doc_id = m.group(1)
             api_url = self.bilibili_h_api(doc_id)
