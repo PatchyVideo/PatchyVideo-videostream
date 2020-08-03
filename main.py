@@ -30,6 +30,9 @@ from aiohttp import web
 from aiohttp import ClientSession
 
 from you_get.extractors import bilibili
+from ydl.YoutubeDL import YoutubeDL
+
+ydl = YoutubeDL()
 
 app = web.Application()
 routes = web.RouteTableDef()
@@ -49,6 +52,20 @@ async def entry(request) :
 			if hasattr(extractor_instance, 'danmaku') :
 				extra_info['danmaku'] = extractor_instance.danmaku
 			ret = {'streams': info, 'extractor': 'BiliBili', 'extra': extra_info}
+			return web.json_response(ret)
+		else :
+			ie_result = ydl.extract_info(url, download = False)
+			#return web.json_response(ie_result)
+			streams = []
+			for item in ie_result['formats'] :
+				if item['acodec'] != 'none' and item['vcodec'] != 'none' :
+					streams.append({
+						'src': [item['url']],
+						'id': item['format_id'],
+						'container': item['container'] if 'container' in item else '',
+						'quality': item['format_note']
+					})
+			ret = {'streams': streams, 'extractor': ie_result['extractor_key'], 'extra': {}}
 			return web.json_response(ret)
 	except Exception as e :
 		return web.json_response({"vs_err": repr(e)})
