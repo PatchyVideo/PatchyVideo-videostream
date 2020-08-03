@@ -26,8 +26,6 @@
 
 import asyncio
 
-from bson.json_util import dumps, loads
-
 from aiohttp import web
 from aiohttp import ClientSession
 
@@ -51,9 +49,9 @@ async def entry(request) :
 			if hasattr(extractor_instance, 'danmaku') :
 				extra_info['danmaku'] = extractor_instance.danmaku
 			ret = {'streams': info, 'extractor': 'BiliBili', 'extra': extra_info}
-			return web.json_response(ret, dumps = dumps)
+			return web.json_response(ret)
 	except Exception as e :
-		return web.json_response({"vs_err": repr(e)}, dumps = dumps)
+		return web.json_response({"vs_err": repr(e)})
 
 app.add_routes(routes)
 
