@@ -44,6 +44,9 @@ async def entry(request) :
 		if 'bilibili.com' in url :
 			extractor_instance = bilibili.Bilibili()
 			info = await extractor_instance.extract_info_only(url, info_only = True)
+			for i in range(len(info)) :
+				if '.mp4?' in info[i]['src'][0] :
+					info[i]['container'] = 'mp4'
 			extra_info = {}
 			if hasattr(extractor_instance, 'video_cid') :
 				extra_info['cid'] = extractor_instance.video_cid
