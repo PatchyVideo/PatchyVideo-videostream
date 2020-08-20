@@ -37,10 +37,27 @@ ydl = YoutubeDL()
 app = web.Application()
 routes = web.RouteTableDef()
 
+TMP_TABLE = {
+	'https://www.bilibili.com/video/av92261?p=1': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P1. PART1)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P1. PART1).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=2': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P2. PART2)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P2. PART2).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=3': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P3. PART3)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P3. PART3).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=4': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P4. PART4)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P4. PART4).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=5': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P5. PART5)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P5. PART5).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=6': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P6. PART6)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P6. PART6).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=7': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P7. PART7)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P7. PART7).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=8': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P8. PART8)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P8. PART8).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=9': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P9. PART9)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P9. PART9).cmt.xml', 'format': 'dash'},
+	'https://www.bilibili.com/video/av92261?p=10': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P10. PART10)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P10. PART10).cmt.xml', 'format': 'dash'},
+}
+
 @routes.post("/")
 async def entry(request) :
 	try :
 		url = (await request.json())['url']
+		if url in TMP_TABLE :
+			info = TMP_TABLE[url]
+			ret = {'streams': [{'src': [info['src']], 'container': info['format']}], 'extractor': 'BiliBili', 'extra': {'danmaku': info['danmaku']}}
+			return web.json_response(ret)
 		if 'bilibili.com' in url :
 			extractor_instance = bilibili.Bilibili()
 			info = await extractor_instance.extract_info_only(url, info_only = True)
