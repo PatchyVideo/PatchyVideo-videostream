@@ -61,6 +61,17 @@ async def entry(request) :
 		if 'bilibili.com' in url :
 			extractor_instance = bilibili.Bilibili()
 			info = await extractor_instance.extract_info_only(url, info_only = True)
+			if not info and extractor_instance.dash_streams :
+				streams = extractor_instance.dash_streams
+				info = []
+				for i, (k, v) in enumerate(streams.items()) :
+					info.append({
+						'container': v['container'],
+						'id': k,
+						'quality': v['quality'],
+						'src': [src[0] for src in v['src']],
+						'size': v['size']
+					})
 			for i in range(len(info)) :
 				if '.mp4?' in info[i]['src'][0] :
 					info[i]['container'] = 'mp4'
