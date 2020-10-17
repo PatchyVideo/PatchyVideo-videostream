@@ -177,10 +177,12 @@ class Bilibili(VideoExtractor):
             raise Exception('playlist not supported')
             self.download_playlist_by_url(self.url, **kwargs)
             return
+        self.duration_ms = None
 
         # regular av video
         if sort == 'video':
             initial_state_text = match1(html_content, r'__INITIAL_STATE__=(.*?);\(function\(\)')  # FIXME
+            self.duration_ms = int(match1(html_content, r'\"timelength\":(\d+)'))
             initial_state = json.loads(initial_state_text)
 
             playinfo_text = match1(html_content, r'__playinfo__=(.*?)</script><script>')  # FIXME

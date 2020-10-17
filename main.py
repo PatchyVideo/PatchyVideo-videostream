@@ -66,7 +66,7 @@ async def entry(request) :
 				info = []
 				for i, (k, v) in enumerate(streams.items()) :
 					info.append({
-						'container': v['container'],
+						'container': 'dash',
 						'id': k,
 						'quality': v['quality'],
 						'src': [src[0] for src in v['src']],
@@ -82,6 +82,10 @@ async def entry(request) :
 				extra_info['lyrics'] = extractor_instance.lyrics
 			if hasattr(extractor_instance, 'danmaku') :
 				extra_info['danmaku'] = extractor_instance.danmaku
+			if extractor_instance.duration_ms :
+				extra_info['duration_ms'] = extractor_instance.duration_ms
+			else :
+				extra_info['duration_ms'] = 0
 			ret = {'streams': info, 'extractor': 'BiliBili', 'extra': extra_info}
 			return web.json_response(ret)
 		else :
