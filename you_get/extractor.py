@@ -59,8 +59,7 @@ class VideoExtractor():
         self.extract(**kwargs)
 
         self.download(**kwargs)
-
-    
+        
     async def extract_info_only(self, url, **kwargs):
         self.url = url
         self.vid = None

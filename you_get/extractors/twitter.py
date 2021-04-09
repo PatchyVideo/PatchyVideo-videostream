@@ -34,7 +34,7 @@ def twitter_download(url, output_dir='.', merge=True, info_only=False, **kwargs)
                              **kwargs)
         return
 
-    html = get_html(url, faker=False) # disable faker to prevent 302 infinite redirect
+    html = get_html(url, faker=True) # now it seems faker must be enabled
     screen_name = r1(r'twitter\.com/([^/]+)', url) or r1(r'data-screen-name="([^"]*)"', html) or \
         r1(r'<meta name="twitter:title" content="([^"]*)"', html)
     item_id = r1(r'twitter\.com/[^/]+/status/(\d+)', url) or r1(r'data-item-id="([^"]*)"', html) or \
@@ -51,7 +51,30 @@ def twitter_download(url, output_dir='.', merge=True, info_only=False, **kwargs)
     api_content = get_content(api_url, headers={'authorization': authorization, 'x-guest-token': guest_token})
 
     info = json.loads(api_content)
-    media = info['globalObjects']['tweets'][item_id]['extended_entities']['media']
+    if 'extended_entities' in info['globalObjects']['tweets'][item_id]:
+        # if the tweet contains media, download them
+        media = info['globalObjects']['tweets'][item_id]['extended_entities']['media']
+
+    elif info['globalObjects']['tweets'][item_id].get('is_quote_status') == True:
+        # if the tweet does not contain media, but it quotes a tweet
+        # and the quoted tweet contains media, download them
+        item_id = info['globalObjects']['tweets'][item_id]['quoted_status_id_str']
+
+        api_url = 'https://api.twitter.com/2/timeline/conversation/%s.json?tweet_mode=extended' % item_id
+        api_content = get_content(api_url, headers={'authorization': authorization, 'x-guest-token': guest_token})
+
+        info = json.loads(api_content)
+
+        if 'extended_entities' in info['globalObjects']['tweets'][item_id]:
+            media = info['globalObjects']['tweets'][item_id]['extended_entities']['media']
+        else:
+            # quoted tweet has no media
+            return
+
+    else:
+        # no media, no quoted tweet
+        return
+
     for medium in media:
         if 'video_info' in medium:
             # FIXME: we're assuming one tweet only contains one video here

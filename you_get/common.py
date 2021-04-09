@@ -77,6 +77,7 @@ SITES = {
     'letv'             : 'le',
     'lizhi'            : 'lizhi',
     'longzhu'          : 'longzhu',
+    'lrts'             : 'lrts',
     'magisto'          : 'magisto',
     'metacafe'         : 'metacafe',
     'mgtv'             : 'mgtv',
@@ -113,12 +114,10 @@ SITES = {
     'veoh'             : 'veoh',
     'vine'             : 'vine',
     'vk'               : 'vk',
-    'xiami'            : 'xiami',
     'xiaokaxiu'        : 'yixia',
     'xiaojiadianvideo' : 'fc2video',
     'ximalaya'         : 'ximalaya',
     'xinpianchang'     : 'xinpianchang',
-    'yinyuetai'        : 'yinyuetai',
     'yizhibo'          : 'yizhibo',
     'youku'            : 'youku',
     'youtu'            : 'youtube',
@@ -144,7 +143,7 @@ fake_headers = {
     'Accept-Charset': 'UTF-8,*;q=0.5',
     'Accept-Encoding': 'gzip,deflate,sdch',
     'Accept-Language': 'en-US,en;q=0.8',
-    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64; rv:64.0) Gecko/20100101 Firefox/64.0',  # noqa
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/79.0.3945.74 Safari/537.36 Edg/79.0.309.43',  # noqa
 }
 
 if sys.stdout.isatty():
@@ -649,10 +648,12 @@ def url_save(
     if refer is not None:
         tmp_headers['Referer'] = refer
     if type(url) is list:
-        file_size = urls_size(url, faker=faker, headers=tmp_headers)
+        chunk_sizes = [url_size(url, faker=faker, headers=tmp_headers) for url in url]
+        file_size = sum(chunk_sizes)
         is_chunked, urls = True, url
     else:
         file_size = url_size(url, faker=faker, headers=tmp_headers)
+        chunk_sizes = [file_size]
         is_chunked, urls = False, [url]
 
     continue_renameing = True
@@ -716,9 +717,13 @@ def url_save(
     else:
         open_mode = 'wb'
 
-    for url in urls:
+    chunk_start = 0
+    chunk_end = 0
+    for i, url in enumerate(urls):
         received_chunk = 0
-        if received < file_size:
+        chunk_start += 0 if i == 0 else chunk_sizes[i - 1]
+        chunk_end += chunk_sizes[i]
+        if received < file_size and received < chunk_end:
             if faker:
                 tmp_headers = fake_headers
             '''
@@ -728,8 +733,9 @@ def url_save(
             else:
                 headers = {}
             '''
-            if received and not is_chunked:  # only request a range when not chunked
-                tmp_headers['Range'] = 'bytes=' + str(received) + '-'
+            if received:
+                # chunk_start will always be 0 if not chunked
+                tmp_headers['Range'] = 'bytes=' + str(received - chunk_start) + '-'
             if refer:
                 tmp_headers['Referer'] = refer
 
@@ -777,8 +783,7 @@ def url_save(
                         elif not is_chunked and received == file_size:  # Download finished
                             break
                         # Unexpected termination. Retry request
-                        if not is_chunked:  # when
-                            tmp_headers['Range'] = 'bytes=' + str(received) + '-'
+                        tmp_headers['Range'] = 'bytes=' + str(received - chunk_start) + '-'
                         response = urlopen_with_retry(
                             request.Request(url, headers=tmp_headers)
                         )
@@ -1077,6 +1082,20 @@ def download_urls(
                 else:
                     from .processor.join_ts import concat_ts
                     concat_ts(parts, output_filepath)
+                print('Merged into %s' % output_filename)
+            except:
+                raise
+            else:
+                for part in parts:
+                    os.remove(part)
+
+        elif ext == 'mp3':
+            try:
+                from .processor.ffmpeg import has_ffmpeg_installed
+
+                assert has_ffmpeg_installed()
+                from .processor.ffmpeg import ffmpeg_concat_mp3_to_mp3
+                ffmpeg_concat_mp3_to_mp3(parts, output_filepath)
                 print('Merged into %s' % output_filename)
             except:
                 raise
@@ -1422,12 +1441,27 @@ def load_cookies(cookiefile):
 def set_socks_proxy(proxy):
     try:
         import socks
-        socks_proxy_addrs = proxy.split(':')
-        socks.set_default_proxy(
-            socks.SOCKS5,
-            socks_proxy_addrs[0],
-            int(socks_proxy_addrs[1])
-        )
+        if '@' in proxy:
+            proxy_info = proxy.split("@")
+            socks_proxy_addrs = proxy_info[1].split(':')
+            socks_proxy_auth = proxy_info[0].split(":")
+            print(socks_proxy_auth[0]+" "+socks_proxy_auth[1]+" "+socks_proxy_addrs[0]+" "+socks_proxy_addrs[1])
+            socks.set_default_proxy(
+                socks.SOCKS5,
+                socks_proxy_addrs[0],
+                int(socks_proxy_addrs[1]),
+                True,
+                socks_proxy_auth[0],
+                socks_proxy_auth[1]
+            )
+        else:
+           socks_proxy_addrs = proxy.split(':')
+           print(socks_proxy_addrs[0]+" "+socks_proxy_addrs[1])
+           socks.set_default_proxy(
+               socks.SOCKS5,
+               socks_proxy_addrs[0],
+               int(socks_proxy_addrs[1]),
+           )
         socket.socket = socks.socksocket
 
         def getaddrinfo(*args):
@@ -1541,6 +1575,21 @@ def script_main(download, download_playlist, **kwargs):
         '-l', '--playlist', action='store_true',
         help='Prefer to download a playlist'
     )
+
+    playlist_grp = parser.add_argument_group('Playlist optional options')
+    playlist_grp.add_argument(
+        '--first', metavar='FIRST',
+        help='the first number'
+    )
+    playlist_grp.add_argument(
+        '--last', metavar='LAST',
+        help='the last number'
+    )
+    playlist_grp.add_argument(
+        '--size', '--page-size', metavar='PAGE_SIZE',
+        help='the page size number'
+    )
+
     download_grp.add_argument(
         '-a', '--auto-rename', action='store_true', default=False,
         help='Auto rename same name different files'
@@ -1565,7 +1614,7 @@ def script_main(download, download_playlist, **kwargs):
         '--no-proxy', action='store_true', help='Never use a proxy'
     )
     proxy_grp.add_argument(
-        '-s', '--socks-proxy', metavar='HOST:PORT',
+        '-s', '--socks-proxy', metavar='HOST:PORT or USERNAME:PASSWORD@HOST:PORT',
         help='Use an SOCKS5 proxy for downloading'
     )
 
@@ -1658,7 +1707,7 @@ def script_main(download, download_playlist, **kwargs):
     socket.setdefaulttimeout(args.timeout)
 
     try:
-        extra = {}
+        extra = {'args': args}
         if extractor_proxy:
             extra['extractor_proxy'] = extractor_proxy
         if stream_id:
