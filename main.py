@@ -1,41 +1,21 @@
 
-# from flask import Flask, session, request, current_app
-# app = Flask('VideoStream')
-
-# from ydl.YoutubeDL import YoutubeDL
-# ydl = YoutubeDL()
-# from you_get.extractors import bilibili
-
-# from json import dumps
-
-# @app.route("/", methods = ['POST'])
-# def entry() :
-#     request_json = request.get_json()
-#     try :
-#         if 'bilibili.com' in request_json['url'] :
-#             ret = bilibili.extract(request_json['url'], info_only = True)
-#             ret = {'streams': ret, 'extractor': 'BiliBili'}
-#             return current_app.response_class(dumps(ret) + '\n', mimetype = current_app.config['JSONIFY_MIMETYPE'])
-#         ie_result = ydl.extract_info(request_json['url'], download = False)
-#     except Exception as e :
-#         return current_app.response_class(dumps({"vs_err": repr(e)}) + '\n', mimetype = current_app.config['JSONIFY_MIMETYPE'])
-#     return current_app.response_class(dumps(ie_result) + '\n', mimetype = current_app.config['JSONIFY_MIMETYPE'])
-
-# if __name__ == '__main__' or __name__ == 'main' :
-#     app.run('0.0.0.0', 5006)
-
 import asyncio
+import json
+import re
 
 from aiohttp import web
 from aiohttp import ClientSession
 
 from you_get.extractors import bilibili
 from ydl.YoutubeDL import YoutubeDL
+from you_get.common import match1, r1
 
 ydl = YoutubeDL()
 
 app = web.Application()
 routes = web.RouteTableDef()
+
+authorization = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
 
 TMP_TABLE = {
 	'https://www.bilibili.com/video/av92261?p=1': {'src': 'https://thvideo.tv/kkhta/【東方手書】恋恋的♥心♥跳♥大冒险【PART1-10】 (P1. PART1)_MP4.mpd', 'danmaku': 'https://thvideo.tv/kkhta/kkhta-1.json', 'format': 'dash'},
@@ -88,6 +68,47 @@ async def entry(request) :
 				extra_info['duration_ms'] = 0
 			ret = {'streams': info, 'extractor': 'BiliBili', 'extra': extra_info}
 			return web.json_response(ret)
+		elif 'twitter.com' in url :
+			if re.match(r'https?://mobile', url): # normalize mobile URL
+				link = 'https://' + match1(url, r'//mobile\.(.+)')
+			screen_name = r1(r'twitter\.com/([^/]+)', url)
+			item_id = r1(r'twitter\.com/[^/]+/status/(\d+)', url)
+			async with ClientSession() as session:
+				ga_url = 'https://api.twitter.com/1.1/guest/activate.json'
+				async with session.post(ga_url, headers = {'authorization': authorization}) as resp:
+					ga_content = await resp.text()
+				guest_token = json.loads(ga_content)['guest_token']
+				api_url = 'https://api.twitter.com/1.1/statuses/show.json?id=%s&tweet_mode=extended&include_entities=true' % item_id
+				async with session.get(api_url, headers = {'authorization': authorization, 'x-guest-token': guest_token}) as resp:
+					api_content = await resp.text()
+				info = json.loads(api_content)
+				id_str = info['id_str']
+				mtype = 'none'
+				murls = []
+				if 'entities' in info and 'media' in info['entities'] :
+					for item in info['entities']['media'] :
+						if 'media_url' in item :
+							media_url = item['media_url']
+							murls.append(media_url)
+							if 'ext_tw_video_thumb' in media_url and mtype == 'none' :
+								mtype = 'video'
+							elif mtype == 'none' :
+								mtype = 'image'
+				if mtype == 'video' and 'extended_entities' in info and 'video_info' in info['extended_entities']['media'][0] :
+					# try :
+					# 	db.media_meta.insert_one({
+					# 		'id': id_str,
+					# 		'sn': info['user']['screen_name'],
+					# 		'text': info['text'],
+					# 		'type': 'video',
+					# 		'urls': [item['url'] for item in info['extended_entities']['media'][0]['video_info']['variants']],
+					# 		'downloaded': False
+					# 	})
+					# 	vid_cnt += 1
+					# except :
+					# 	pass
+					return web.json_response({'streams':[{'src':[item['url'].replace('https://video.twimg.com/ext_tw_video', 'https://thvideo.tv/twitter-video')], 'container': 'mp4', 'bitrate': item['bitrate']} for item in info['extended_entities']['media'][0]['video_info']['variants'] if item['content_type'] == 'video/mp4']})
+				return web.json_response({'streams':[]})
 		else :
 			ie_result = ydl.extract_info(url, download = False)
 			#return web.json_response(ie_result)
