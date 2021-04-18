@@ -114,13 +114,17 @@ async def entry(request) :
 			#return web.json_response(ie_result)
 			streams = []
 			for item in ie_result['formats'] :
-				if item['acodec'] != 'none' and item['vcodec'] != 'none' :
-					streams.append({
-						'src': [item['url']],
-						'id': item['format_id'],
-						'container': item['container'] if 'container' in item else '',
-						'quality': item['format_note']
-					})
+				item_to_append = {
+					'src': [item['url']],
+					'id': item['format_id'],
+					'container': item['container'] if 'container' in item else '',
+					'quality': item['format_note'],
+				}
+				if item['acodec'] != 'none' :
+					item_to_append['acodec'] = item['acodec']
+				if item['vcodec'] != 'none' :
+					item_to_append['vcodec'] = item['vcodec']
+				streams.append(item_to_append)
 			ret = {'streams': streams, 'extractor': ie_result['extractor_key'], 'extra': {}}
 			return web.json_response(ret)
 	except Exception as e :
