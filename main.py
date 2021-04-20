@@ -116,6 +116,7 @@ async def entry(request) :
 			for item in ie_result['formats'] :
 				item_to_append = {
 					'src': [item['url']],
+					'tbr': item['tbr'],
 					'id': item['format_id'],
 					'container': item['container'] if 'container' in item else '',
 					'quality': item['format_note'],
@@ -125,6 +126,7 @@ async def entry(request) :
 				if item['vcodec'] != 'none' :
 					item_to_append['vcodec'] = item['vcodec']
 				streams.append(item_to_append)
+				streams = sorted(streams, key = lambda item: -float(item['tbr']))
 			ret = {'streams': streams, 'extractor': ie_result['extractor_key'], 'extra': {}}
 			return web.json_response(ret)
 	except Exception as e :
