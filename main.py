@@ -130,6 +130,8 @@ async def entry(request) :
 			ret = {'streams': streams, 'extractor': ie_result['extractor_key'], 'extra': {}}
 			return web.json_response(ret)
 	except Exception as e :
+		import traceback
+		traceback.print_exc()
 		return web.json_response({"vs_err": repr(e)})
 
 app.add_routes(routes)
