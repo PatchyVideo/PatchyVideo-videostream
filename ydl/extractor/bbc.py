@@ -11,6 +11,8 @@ from ..compat import (
     compat_etree_Element,
     compat_HTTPError,
     compat_parse_qs,
+    compat_str,
+    compat_urllib_error,
     compat_urllib_parse_urlparse,
     compat_urlparse,
 )
@@ -25,8 +27,10 @@ from ..utils import (
     js_to_json,
     parse_duration,
     parse_iso8601,
+    strip_or_none,
     try_get,
     unescapeHTML,
+    unified_timestamp,
     url_or_none,
     urlencode_postdata,
     urljoin,
@@ -36,7 +40,7 @@ from ..utils import (
 class BBCCoUkIE(InfoExtractor):
     IE_NAME = 'bbc.co.uk'
     IE_DESC = 'BBC iPlayer'
-    _ID_REGEX = r'(?:[pbm][\da-z]{7}|w[\da-z]{7,14})'
+    _ID_REGEX = r'(?:[pbml][\da-z]{7}|w[\da-z]{7,14})'
     _VALID_URL = r'''(?x)
                     https?://
                         (?:www\.)?bbc\.co\.uk/
@@ -392,9 +396,17 @@ class BBCCoUkIE(InfoExtractor):
                         formats.extend(self._extract_mpd_formats(
                             href, programme_id, mpd_id=format_id, fatal=False))
                     elif transfer_format == 'hls':
-                        formats.extend(self._extract_m3u8_formats(
-                            href, programme_id, ext='mp4', entry_protocol='m3u8_native',
-                            m3u8_id=format_id, fatal=False))
+                        # TODO: let expected_status be passed into _extract_xxx_formats() instead
+                        try:
+                            fmts = self._extract_m3u8_formats(
+                                href, programme_id, ext='mp4', entry_protocol='m3u8_native',
+                                m3u8_id=format_id, fatal=False)
+                        except ExtractorError as e:
+                            if not (isinstance(e.exc_info[1], compat_urllib_error.HTTPError)
+                                    and e.exc_info[1].code in (403, 404)):
+                                raise
+                            fmts = []
+                        formats.extend(fmts)
                     elif transfer_format == 'hds':
                         formats.extend(self._extract_f4m_formats(
                             href, programme_id, f4m_id=format_id, fatal=False))
@@ -761,23 +773,44 @@ class BBCIE(BBCCoUkIE):
         'only_matching': True,
     }, {
         # custom redirection to www.bbc.com
+        # also, video with window.__INITIAL_DATA__
         'url': 'http://www.bbc.co.uk/news/science-environment-33661876',
-        'only_matching': True,
+        'info_dict': {
+            'id': 'p02xzws1',
+            'ext': 'mp4',
+            'title': "Pluto may have 'nitrogen glaciers'",
+            'description': 'md5:6a95b593f528d7a5f2605221bc56912f',
+            'thumbnail': r're:https?://.+/.+\.jpg',
+            'timestamp': 1437785037,
+            'upload_date': '20150725',
+        },
+    }, {
+        # video with window.__INITIAL_DATA__ and value as JSON string
+        'url': 'https://www.bbc.com/news/av/world-europe-59468682',
+        'info_dict': {
+            'id': 'p0b71qth',
+            'ext': 'mp4',
+            'title': 'Why France is making this woman a national hero',
+            'description': 'md5:7affdfab80e9c3a1f976230a1ff4d5e4',
+            'thumbnail': r're:https?://.+/.+\.jpg',
+            'timestamp': 1638230731,
+            'upload_date': '20211130',
+        },
     }, {
         # single video article embedded with data-media-vpid
         'url': 'http://www.bbc.co.uk/sport/rowing/35908187',
         'only_matching': True,
     }, {
+        # bbcthreeConfig
         'url': 'https://www.bbc.co.uk/bbcthree/clip/73d0bbd0-abc3-4cea-b3c0-cdae21905eb1',
         'info_dict': {
             'id': 'p06556y7',
             'ext': 'mp4',
-            'title': 'Transfers: Cristiano Ronaldo to Man Utd, Arsenal to spend?',
-            'description': 'md5:4b7dfd063d5a789a1512e99662be3ddd',
+            'title': 'Things Not To Say to people that live on council estates',
+            'description': "From being labelled a 'chav', to the presumption that they're 'scroungers', people who live on council estates encounter all kinds of prejudices and false assumptions about themselves, their families, and their lifestyles. Here, eight people discuss the common statements, misconceptions, and clichés that they're tired of hearing.",
+            'duration': 360,
+            'thumbnail': r're:https?://.+/.+\.jpg',
         },
-        'params': {
-            'skip_download': True,
-        }
     }, {
         # window.__PRELOADED_STATE__
         'url': 'https://www.bbc.co.uk/radio/play/b0b9z4yl',
@@ -1150,9 +1183,16 @@ class BBCIE(BBCCoUkIE):
                 return self.playlist_result(
                     entries, playlist_id, playlist_title, playlist_description)
 
-        initial_data = self._parse_json(self._search_regex(
-            r'window\.__INITIAL_DATA__\s*=\s*({.+?});', webpage,
-            'preload state', default='{}'), playlist_id, fatal=False)
+        initial_data = self._search_regex(
+            r'window\.__INITIAL_DATA__\s*=\s*("{.+?}")\s*;', webpage,
+            'quoted preload state', default=None)
+        if initial_data is None:
+            initial_data = self._search_regex(
+                r'window\.__INITIAL_DATA__\s*=\s*({.+?})\s*;', webpage,
+                'preload state', default={})
+        else:
+            initial_data = self._parse_json(initial_data or '"{}"', playlist_id, fatal=False)
+        initial_data = self._parse_json(initial_data, playlist_id, fatal=False)
         if initial_data:
             def parse_media(media):
                 if not media:
@@ -1164,19 +1204,39 @@ class BBCIE(BBCCoUkIE):
                         continue
                     formats, subtitles = self._download_media_selector(item_id)
                     self._sort_formats(formats)
+                    item_desc = None
+                    blocks = try_get(media, lambda x: x['summary']['blocks'], list)
+                    if blocks:
+                        summary = []
+                        for block in blocks:
+                            text = try_get(block, lambda x: x['model']['text'], compat_str)
+                            if text:
+                                summary.append(text)
+                        if summary:
+                            item_desc = '\n\n'.join(summary)
+                    item_time = None
+                    for meta in try_get(media, lambda x: x['metadata']['items'], list) or []:
+                        if try_get(meta, lambda x: x['label']) == 'Published':
+                            item_time = unified_timestamp(meta.get('timestamp'))
+                            break
                     entries.append({
                         'id': item_id,
                         'title': item_title,
                         'thumbnail': item.get('holdingImageUrl'),
                         'formats': formats,
                         'subtitles': subtitles,
+                        'timestamp': item_time,
+                        'description': strip_or_none(item_desc),
                     })
             for resp in (initial_data.get('data') or {}).values():
                 name = resp.get('name')
                 if name == 'media-experience':
                     parse_media(try_get(resp, lambda x: x['data']['initialItem']['mediaItem'], dict))
                 elif name == 'article':
-                    for block in (try_get(resp, lambda x: x['data']['blocks'], list) or []):
+                    for block in (try_get(resp,
+                                          (lambda x: x['data']['blocks'],
+                                           lambda x: x['data']['content']['model']['blocks'],),
+                                          list) or []):
                         if block.get('type') != 'media':
                             continue
                         parse_media(block.get('model'))
