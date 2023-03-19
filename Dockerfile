@@ -8,7 +8,7 @@ FROM base as builder
 
 RUN apk add --no-cache build-base 
 
-RUN python -m pip install --no-cache-dir -U pip wheel
+RUN python -m pip install --no-cache-dir -U pip wheel -i https://mirrors.tuna.tsinghua.edu.cn/pypi/
 
 COPY ./requirements.txt /service/
 
