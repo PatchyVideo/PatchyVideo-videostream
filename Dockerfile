@@ -1,14 +1,31 @@
-# Use an official Python runtime as a parent image
-FROM python:3.7-slim
+FROM python:3.10-alpine as base
 
-# Set the working directory to /webapp
-WORKDIR /webapp
+RUN apk update && apk upgrade
 
-# Copy the current directory contents into the container at /webapp
-COPY . /webapp
+FROM base as builder
 
-# Install any needed packages specified in requirements.txt
-RUN pip3 install --trusted-host pypi.python.org -r requirements.txt
+RUN apk add --no-cache build-base 
 
-# Make port 80 available to the world outside this container
-EXPOSE 5006
+RUN python -m pip install --no-cache-dir -U pip wheel
+
+COPY ./requirements.txt /service/
+
+RUN python -OO -m pip wheel --no-cache-dir --wheel-dir=/root/wheels -r /service/requirements.txt
+
+FROM base
+
+COPY --from=builder /root/wheels /root/wheels
+
+RUN python -m pip install --no-cache --no-index /root/wheels/* \ 
+ && rm -rf /root/wheels
+
+COPY . /service
+
+RUN apk add --no-cache tzdata \
+ && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+ && echo Asia/Shanghai > /etc/timezone \
+ && apk del tzdata
+
+WORKDIR /service
+
+CMD [ "python", "main.py" ]

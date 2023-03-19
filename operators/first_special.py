@@ -1,7 +1,6 @@
 """
 First Special Operator
 """
-import asyncio
 from core.url_operator import OperatorInterface
 from core.util import nop
 
