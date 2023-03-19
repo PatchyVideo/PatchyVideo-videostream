@@ -1,5 +1,7 @@
 FROM python:3.10-alpine as base
 
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
+
 RUN apk update && apk upgrade
 
 FROM base as builder
@@ -10,7 +12,8 @@ RUN python -m pip install --no-cache-dir -U pip wheel
 
 COPY ./requirements.txt /service/
 
-RUN python -OO -m pip wheel --no-cache-dir --wheel-dir=/root/wheels -r /service/requirements.txt
+RUN python -OO -m pip wheel --no-cache-dir --wheel-dir=/root/wheels \
+  -i https://mirrors.tuna.tsinghua.edu.cn/pypi/ -r /service/requirements.txt
 
 FROM base
 
