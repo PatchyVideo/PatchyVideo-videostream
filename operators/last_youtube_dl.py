@@ -2,6 +2,7 @@
 Youtube-DL Operator
 """
 from core.url_operator import OperatorInterface
+from core.util import nop
 from ydl.YoutubeDL import YoutubeDL
 
 ydl = YoutubeDL()
@@ -19,6 +20,7 @@ class LastYoutubeDl(OperatorInterface):
         ]
 
     async def main(self, url: str):
+        await nop()
         ie_result = ydl.extract_info(url, download=False)
         assert ie_result is not None
 

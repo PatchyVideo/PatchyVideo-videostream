@@ -1,7 +1,9 @@
 """
 First Special Operator
 """
+import asyncio
 from core.url_operator import OperatorInterface
+from core.util import nop
 
 
 class FirstSpecial(OperatorInterface):
@@ -27,6 +29,7 @@ class FirstSpecial(OperatorInterface):
         return list(cls.infoDict)
 
     async def main(self, url: str):
+        await nop()
         info = self.infoDict[url]
         return {
             'streams': [{'src': [info['src']], 'container': info['format']}],

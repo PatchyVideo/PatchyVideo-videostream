@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from typing import Tuple, Type, Union
 
+from core.util import snake_to_camel
+
 BASE_DIR = 'operators'
 BASE_PATH = (Path(__file__).parent.absolute() / f"../{BASE_DIR}").resolve()
 
@@ -44,11 +46,6 @@ class OperatorInterface(metaclass=abc.ABCMeta):
         """Main function of the operator."""
 
 
-def snake_to_camel(name: str) -> str:
-    """Convert snake case to camel case."""
-    return "".join([i.capitalize() for i in name.split("_")])
-
-
 def get_operator(operator_path: Path) -> Union[Type[OperatorInterface], None]:
     """Get operator class from file path."""
     try:
@@ -81,11 +78,11 @@ def list_operators():
     return res
 
 
-def match_operator(url: str) -> Union[Type[OperatorInterface], None]:
+def match_operator(url: str) -> Union[OperatorInterface, None]:
     """Match operator from URL."""
     for (pattern, _, operator) in list_operators():
         if re.match(pattern, url):
-            return operator
+            return operator()
     return None
 
 

@@ -1,19 +1,27 @@
-"""Twitter Operator"""
+"""
+Twitter Operator
+"""
 import json
+from os import getenv
 import re
-from core.url_operator import OperatorInterface
-from you_get.common import match1, r1
 from aiohttp import ClientSession
+from you_get.common import match1, r1
+from core.url_operator import OperatorInterface
 
 
 class Twitter(OperatorInterface):
     """Twitter Operator"""
 
-    authorization = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
+    authorization = getenv('TWITTER_AUTHORIZATION')
 
     ga_url = 'https://api.twitter.com/1.1/guest/activate.json'
 
     api_url = 'https://api.twitter.com/1.1/statuses/show.json?id=%s&tweet_mode=extended&include_entities=true'
+
+    def __init__(self) -> None:
+        super().__init__()
+        if Twitter.authorization in [None, '']:
+            raise ValueError('TWITTER_AUTHORIZATION is not set')
 
     @classmethod
     def url_patterns(cls) -> list:
