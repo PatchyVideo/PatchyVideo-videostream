@@ -2,6 +2,7 @@
 URL operator module.
 """
 import abc
+from functools import lru_cache
 import importlib
 import importlib.util
 from pathlib import Path
@@ -9,6 +10,7 @@ import re
 from typing import Tuple, Type, Union
 
 from core.util import snake_to_camel
+
 
 BASE_DIR = 'operators'
 BASE_PATH = (Path(__file__).parent.absolute() / f"../{BASE_DIR}").resolve()
@@ -61,6 +63,7 @@ def get_operator(operator_path: Path) -> Union[Type[OperatorInterface], None]:
         raise err
 
 
+@lru_cache(maxsize=1)
 def list_operators():
     """List all operators."""
     res: list[Tuple[str, int, Type[OperatorInterface]]] = []
@@ -78,11 +81,12 @@ def list_operators():
     return res
 
 
-def match_operator(url: str) -> Union[OperatorInterface, None]:
+@lru_cache(maxsize=128)
+def match_operator(url: str) -> Union[Type[OperatorInterface], None]:
     """Match operator from URL."""
     for (pattern, _, operator) in list_operators():
         if re.match(pattern, url):
-            return operator()
+            return operator
     return None
 
 

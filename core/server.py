@@ -16,4 +16,4 @@ async def root(info: infoModel):
     if operator is None:
         return {'error': 'No suitable operator found'}
 
-    return await operator.main(info.url)
+    return await operator().main(info.url)
