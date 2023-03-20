@@ -66,14 +66,15 @@ def get_operator(operator_path: Path) -> Union[Type[OperatorInterface], None]:
 @lru_cache(maxsize=1)
 def list_operators():
     """List all operators."""
-    res: list[Tuple[str, int, Type[OperatorInterface]]] = []
+    res: list[Tuple[Union[str, re.Pattern], int, Type[OperatorInterface]]] = []
 
     for operator_file in BASE_PATH.glob("[!_]*.py"):
         operator = get_operator(operator_file)
         if operator is not None:
             # flat patterns
-            for pattern in operator.url_patterns():
-                res.append((pattern, operator.priority,  operator))
+            for s in operator.url_patterns():
+                pattern = re.compile(s) if s.startswith('https?') else s
+                res.append((pattern, operator.priority, operator))
 
     # sort by priority
     res.sort(key=lambda x: x[1], reverse=True)
@@ -85,12 +86,8 @@ def list_operators():
 def match_operator(url: str) -> Union[Type[OperatorInterface], None]:
     """Match operator from URL."""
     for (pattern, _, operator) in list_operators():
-        if re.match(pattern, url):
+        if (pattern == url
+            if isinstance(pattern, str)
+                else pattern.match(url)):
             return operator
     return None
-
-
-if __name__ == "__main__":
-    import sys
-    sys.path.append(str(BASE_PATH.parent))
-    print(list_operators())
