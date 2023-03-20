@@ -1,0 +1,14 @@
+version: '3'
+services:
+  videostream:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: videostream
+    ports:
+      - 5006:5006
+    # environment:
+    #   - HOST=
+    #   - PORT=
+    #   - TWITTER_AUTHORIZATION=
