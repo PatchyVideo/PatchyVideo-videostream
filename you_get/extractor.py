@@ -59,28 +59,6 @@ class VideoExtractor():
         self.extract(**kwargs)
 
         self.download(**kwargs)
-        
-    async def extract_info_only(self, url, **kwargs):
-        self.url = url
-        self.vid = None
-
-        # if 'extractor_proxy' in kwargs and kwargs['extractor_proxy']:
-        #     set_proxy(parse_host(kwargs['extractor_proxy']))
-        await self.prepare(**kwargs)
-        if self.out:
-            return
-        # if 'extractor_proxy' in kwargs and kwargs['extractor_proxy']:
-        #     unset_proxy()
-
-        try:
-            self.streams_sorted = [dict([('id', stream_type['id'])] + list(self.streams[stream_type['id']].items())) for stream_type in self.__class__.stream_types if stream_type['id'] in self.streams]
-        except:
-            self.streams_sorted = [dict([('itag', stream_type['itag'])] + list(self.streams[stream_type['itag']].items())) for stream_type in self.__class__.stream_types if stream_type['itag'] in self.streams]
-
-        # self.extract(**kwargs)
-
-        # self.download(**kwargs)
-        return self.streams_sorted
 
     def download_by_vid(self, vid, **kwargs):
         self.url = None
@@ -260,8 +238,8 @@ class VideoExtractor():
             download_urls(urls, self.title, ext, total_size, headers=headers,
                           output_dir=kwargs['output_dir'],
                           merge=kwargs['merge'],
-                          av=stream_id in self.dash_streams)
-
+                          av=stream_id in self.dash_streams,
+                          vid=self.vid)
             if 'caption' not in kwargs or not kwargs['caption']:
                 print('Skipping captions or danmaku.')
                 return

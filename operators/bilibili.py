@@ -15,8 +15,10 @@ class Bilibili(OperatorInterface):
         ]
 
     async def main(self, url: str):
-        instance = bilibili.Bilibili()
-        info = await instance.extract_info_only(url, info_only=True)
+        instance = bilibili.Bilibili(url)
+        instance.prepare()
+        instance.extract()
+        info = instance.streams_sorted
         if not info and instance.dash_streams:
             info = [
                 {
@@ -36,15 +38,16 @@ class Bilibili(OperatorInterface):
 
         extra_info = {}
 
-        if hasattr(instance, 'video_cid'):
-            extra_info['cid'] = instance.video_cid
+        if hasattr(instance, 'vid'):
+            extra_info['cid'] = instance.vid
         if hasattr(instance, 'lyrics'):
             extra_info['lyrics'] = instance.lyrics
         if hasattr(instance, 'danmaku'):
             extra_info['danmaku'] = instance.danmaku
-        if hasattr(instance, 'duration_ms'):
-            extra_info['duration_ms'] = instance.duration_ms
-        else:
-            extra_info['duration_ms'] = 0
+        # FIXME: no attr
+        # if hasattr(instance, 'duration_ms'):
+        #     extra_info['duration_ms'] = instance.duration_ms
+        # else:
+        extra_info['duration_ms'] = 0
 
         return {'streams': info, 'extractor': 'BiliBili', 'extra': extra_info}
