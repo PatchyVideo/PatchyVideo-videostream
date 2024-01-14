@@ -1,19 +1,17 @@
 FROM python:3.10-alpine as base
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.ustc.edu.cn/g' /etc/apk/repositories
-
 RUN apk update && apk upgrade
 
 FROM base as builder
 
 RUN apk add --no-cache build-base 
 
-RUN python -m pip install --no-cache-dir -U pip wheel -i https://pypi.tuna.tsinghua.edu.cn/simple 
+RUN python -m pip install --no-cache-dir -U pip wheel
 
 COPY ./requirements.txt /service/
 
 RUN python -OO -m pip wheel --no-cache-dir --wheel-dir=/root/wheels \
-  -i https://pypi.tuna.tsinghua.edu.cn/simple -r /service/requirements.txt
+  -r /service/requirements.txt
 
 FROM base
 
@@ -23,11 +21,6 @@ RUN python -m pip install --no-cache --no-index /root/wheels/* \
  && rm -rf /root/wheels
 
 COPY . /service
-
-RUN apk add --no-cache tzdata \
- && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
- && echo Asia/Shanghai > /etc/timezone \
- && apk del tzdata
 
 WORKDIR /service
 
